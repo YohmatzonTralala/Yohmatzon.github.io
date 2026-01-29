@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YohmatzonTV</title>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            margin: 0;
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 100%;
+            margin: 0 auto;
+            padding: 20px;
+            transition: all 0.5s ease;
+        }
+
+        .container.playing-mode {
+            display: flex;
+            padding: 0;
+            height: 100vh;
+        }
+
+        .header {
+            padding: 20px;
+            text-align: center;
+        }
+
+        .container.playing-mode .header {
+            display: none;
+        }
+
+        h1 {
+            color: white;
+            font-size: 3em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .subtitle {
+            color: rgba(255,255,255,0.9);
+            font-size: 1.2em;
+        }
+
+        .channels-sidebar {
+            width: 100%;
+            transition: all 0.5s ease;
+        }
+
+        .container.playing-mode .channels-sidebar {
+            width: 350px;
+            height: 100vh;
+            overflow-y: auto;
+            background: rgba(0,0,0,0.5);
+            backdrop-filter: blur(10px);
+            padding: 15px;
+            border-right: 2px solid rgba(0,217,255,0.3);
+        }
+
+        .container.playing-mode .channels-sidebar::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .container.playing-mode .channels-sidebar::-webkit-scrollbar-track {
+            background: rgba(0,0,0,0.3);
+        }
+
+        .container.playing-mode .channels-sidebar::-webkit-scrollbar-thumb {
+            background: rgba(0,217,255,0.5);
+            border-radius: 4px;
+        }
+
+        .video-container {
+            display: none;
+            flex: 1;
+            background: rgba(0,0,0,0.95);
+            padding: 20px;
+            transition: all 0.5s ease;
+        }
+
+        .video-container.active {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .video-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .channel-title {
+            color: white;
+            font-size: 1.8em;
+            font-weight: bold;
+        }
+
+        .close-btn {
+            background: #e74c3c;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1em;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+
+        .close-btn:hover {
+            background: #c0392b;
+            transform: scale(1.05);
+        }
+
+        #videoPlayer {
+            width: 100%;
+            height: 100%;
+            border-radius: 10px;
+            background: #000;
+        }
+
+        .channels-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 20px;
+            padding: 20px 0;
+            transition: all 0.5s ease;
+        }
+
+        .container.playing-mode .channels-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            padding: 10px 0;
+        }
+
+        .channel-card {
+            background: linear-gradient(145deg, #2d3250, #1f2234);
+            border-radius: 15px;
+            padding: 30px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+            border: 1px solid rgba(255,255,255,0.1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .container.playing-mode .channel-card {
+            padding: 15px 10px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            text-align: left;
+            gap: 15px;
+        }
+
+        .container.playing-mode .channel-card .channel-number {
+            font-size: 1.5em;
+            margin: 0;
+            min-width: 50px;
+        }
+
+        .container.playing-mode .channel-card .channel-name {
+            font-size: 1.1em;
+            margin: 0;
+            flex: 1;
+        }
+
+        .container.playing-mode .channel-card .live-indicator {
+            font-size: 0.7em;
+            padding: 3px 8px;
+        }
+
+        .container.playing-mode .channel-card .play-icon {
+            display: none;
+        }
+
+        .channel-card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 15px 30px rgba(0,0,0,0.6);
+            border-color: rgba(255,255,255,0.3);
+        }
+
+        .container.playing-mode .channel-card:hover {
+            transform: translateX(10px);
+        }
+
+        .channel-card.active-playing {
+            border: 2px solid #00d9ff;
+            background: linear-gradient(145deg, #00d9ff22, #00d9ff11);
+            box-shadow: 0 0 20px rgba(0,217,255,0.4);
+        }
+
+        .channel-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+            transition: 0.5s;
+        }
+
+        .channel-card:hover::before {
+            left: 100%;
+        }
+
+        .channel-number {
+            font-size: 2em;
+            font-weight: bold;
+            color: #00d9ff;
+            margin-bottom: 10px;
+        }
+
+        .channel-name {
+            font-size: 1.3em;
+            font-weight: 600;
+            color: #e0e0e0;
+            margin-bottom: 10px;
+        }
+
+        .live-indicator {
+            display: inline-block;
+            padding: 5px 15px;
+            background: #e74c3c;
+            color: white;
+            border-radius: 20px;
+            font-size: 0.9em;
+            font-weight: bold;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        .play-icon {
+            font-size: 3em;
+            color: #00d9ff;
+            margin-top: 10px;
+        }
+
+        .notification-toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(231, 76, 60, 0.95);
+            color: white;
+            padding: 15px 25px;
+            border-radius: 10px;
+            font-size: 1em;
+            font-weight: 600;
+            z-index: 10000;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.5);
+            opacity: 0;
+            transform: translateX(400px);
+            transition: all 0.3s ease;
+            max-width: 400px;
+            border-left: 5px solid #c0392b;
+        }
+
+        .notification-toast.show {
+            opacity: 1;
+            transform: translateX(0);
+        }
+
+
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 2em;
+            }
+
+            .channels-grid {
+                grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+                gap: 15px;
+            }
+
+            .container.playing-mode .channels-sidebar {
+                width: 250px;
+            }
+
+            .container.playing-mode .channel-card .channel-number {
+                font-size: 1.2em;
+                min-width: 40px;
+            }
+
+            .container.playing-mode .channel-card .channel-name {
+                font-size: 0.9em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container" id="mainContainer">
+        <div class="header">
+            <h1>📺 YohmatzonTV</h1>
+            <p class="subtitle">Click on any channel to start streaming</p>
+        </div>
+
+        <div class="channels-sidebar">
+            <div class="channels-grid" id="channelsGrid"></div>
+        </div>
+
+        <div class="video-container" id="videoContainer">
+            <div class="video-header">
+                <div class="channel-title" id="currentChannelTitle"></div>
+                <button class="close-btn" onclick="closeVideo()">✕ Close</button>
+            </div>
+            <video id="videoPlayer" controls autoplay></video>
+        </div>
+    </div>
+
+    <div class="notification-toast" id="notificationToast"></div>
+
+    <script>
+        const channels = [
+            { number: '11', name: 'KAN', url: 'https://tv.embyil.tv:86/live/10/chunks.m3u8' },
+            { number: '12', name: 'SMOLANIM1', url: 'https://tv.embyil.tv:86/live/20/chunks.m3u8' },
+            { number: '13', name: 'SMOLANIM2', url: 'https://tv.embyil.tv:86/live/30/chunks.m3u8' },
+            { number: '14', name: 'Yinonews', url: 'https://tv.embyil.tv:86/live/40/chunks.m3u8' },
+            { number: '24', name: 'PeAfuh', url: 'https://tv.embyil.tv:86/live/50/chunks.m3u8' },
+            { number: '55', name: 'Sport5', url: 'https://tv.embyil.tv:86/live/120/chunks.m3u8' },
+            { number: '56', name: 'Sport5Plus', url: 'https://tv.embyil.tv:86/live/131/chunks.m3u8' },
+            { number: '58', name: 'Sport5Live', url: 'https://tv.embyil.tv:86/live/130/chunks.m3u8' },
+            { number: '555', name: 'Sport5Stars', url: 'https://tv.embyil.tv:86/live/140/chunks.m3u8' },
+            { number: '51', name: 'Sport1', url: 'https://tv.embyil.tv:86/live/80/chunks.m3u8' },
+            { number: '52', name: 'Sport2', url: 'https://tv.embyil.tv:86/live/90/chunks.m3u8' },
+            { number: '53', name: 'Sport3', url: 'https://tv.embyil.tv:86/live/100/chunks.m3u8' },
+            { number: '54', name: 'Sport4', url: 'https://tv.embyil.tv:86/live/110/chunks.m3u8' },
+            { number: '50', name: 'ONE1', url: 'https://tv.embyil.tv:86/live/160/chunks.m3u8' },
+            { number: '49', name: 'ONE2', url: 'https://tv.embyil.tv:86/live/170/chunks.m3u8' }
+        ];
+
+        let hls = null;
+        let currentChannelIndex = -1;
+
+        function showNotification(message, duration = 5000) {
+            const toast = document.getElementById('notificationToast');
+            toast.textContent = message;
+            toast.className = 'notification-toast show';
+            setTimeout(() => toast.classList.remove('show'), duration);
+        }
+
+        // Create channel cards
+        function createChannelCards() {
+            const grid = document.getElementById('channelsGrid');
+            channels.forEach((channel, index) => {
+                const card = document.createElement('div');
+                card.className = 'channel-card';
+                card.setAttribute('data-index', index);
+                card.onclick = () => playChannel(index);
+                card.innerHTML = `
+                    <div class="channel-number">${channel.number}</div>
+                    <div class="channel-name">${channel.name}</div>
+                    <div class="live-indicator">● LIVE</div>
+                    <div class="play-icon">▶</div>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        function scrollToActiveChannel() {
+            const activeCard = document.querySelector(`.channel-card[data-index="${currentChannelIndex}"]`);
+            if (activeCard) activeCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+
+        function playChannel(index) {
+            const channel = channels[index];
+            const video = document.getElementById('videoPlayer');
+            
+            document.querySelectorAll('.channel-card').forEach(card => card.classList.remove('active-playing'));
+            document.querySelector(`.channel-card[data-index="${index}"]`).classList.add('active-playing');
+            
+            currentChannelIndex = index;
+            document.getElementById('currentChannelTitle').textContent = `${channel.number} - ${channel.name}`;
+            document.getElementById('mainContainer').classList.add('playing-mode');
+            document.getElementById('videoContainer').classList.add('active');
+            
+            setTimeout(scrollToActiveChannel, 100);
+            
+            if (hls) hls.destroy();
+            
+            if (Hls.isSupported()) {
+                hls = new Hls({ debug: false, enableWorker: true, lowLatencyMode: true });
+                hls.loadSource(channel.url);
+                hls.attachMedia(video);
+                hls.on(Hls.Events.MANIFEST_PARSED, () => video.play().catch(() => showNotification('Cannot play video')));
+                hls.on(Hls.Events.ERROR, (event, data) => {
+                    if (data.fatal) {
+                        if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+                            setTimeout(() => hls.startLoad(), 1000);
+                        } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+                            hls.recoverMediaError();
+                        } else {
+                            hls.destroy();
+                            showNotification('Stream error: Unable to load channel');
+                        }
+                    }
+                });
+            } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                video.src = channel.url;
+                video.crossOrigin = "anonymous";
+                video.addEventListener('loadedmetadata', () => video.play().catch(() => showNotification('Cannot play video')));
+                video.addEventListener('error', () => showNotification('Stream cannot be loaded'));
+            } else {
+                showNotification('Browser does not support HLS streaming', 7000);
+            }
+        }
+
+        function closeVideo() {
+            document.getElementById('mainContainer').classList.remove('playing-mode');
+            document.getElementById('videoContainer').classList.remove('active');
+            document.getElementById('videoPlayer').pause();
+            document.querySelectorAll('.channel-card').forEach(card => card.classList.remove('active-playing'));
+            currentChannelIndex = -1;
+            if (hls) {
+                hls.destroy();
+                hls = null;
+            }
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (currentChannelIndex === -1) return;
+            e.preventDefault();
+            if (e.key === 'ArrowUp' && currentChannelIndex > 0) playChannel(currentChannelIndex - 1);
+            else if (e.key === 'ArrowDown' && currentChannelIndex < channels.length - 1) playChannel(currentChannelIndex + 1);
+            else if (e.key === 'Escape') closeVideo();
+        });
+
+        document.addEventListener('wheel', (e) => {
+            if (currentChannelIndex === -1) return;
+            e.preventDefault();
+            const video = document.getElementById('videoPlayer');
+            if (e.deltaY < 0) {
+                video.volume = Math.min(video.volume + 0.05, 1);
+            } else {
+                video.volume = Math.max(video.volume - 0.05, 0);
+            }
+            showNotification(`Volume: ${Math.round(video.volume * 100)}%`, 1000);
+        }, { passive: false });
+
+        createChannelCards();
+    </script>
+</body>
+</html>
